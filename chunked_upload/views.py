@@ -235,7 +235,8 @@ class ChunkedUploadView(ChunkedUploadBaseView):
             if chunked_upload.exists:
                 chunked_upload.file.delete()
 
-            chunked_upload.delete()
+            if start != 0:
+                chunked_upload.delete()
         else:
             self._save(chunked_upload)
             response = self.get_response_data(chunked_upload, request)
