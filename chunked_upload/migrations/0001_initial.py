@@ -19,8 +19,6 @@ class Migration(migrations.Migration):
                 ('filename', models.CharField(max_length=255)),
                 ('offset', models.BigIntegerField(default=0)),
                 ('created_on', models.DateTimeField(auto_now_add=True)),
-                ('status', models.PositiveSmallIntegerField(choices=[(1, 'Uploading'), (2, 'Complete')], default=1)),
-                ('completed_on', models.DateTimeField(blank=True, null=True))
             ],
             options={
                 'abstract': False,

@@ -7,7 +7,6 @@ from django.core.files.uploadedfile import UploadedFile
 from django.utils import timezone
 
 from .settings import EXPIRATION_DELTA, UPLOAD_TO, STORAGE
-from .constants import CHUNKED_UPLOAD_CHOICES, UPLOADING
 
 
 def generate_upload_id():
@@ -26,9 +25,6 @@ class ChunkedUpload(models.Model):
     filename = models.CharField(max_length=255)
     offset = models.BigIntegerField(default=0)
     created_on = models.DateTimeField(auto_now_add=True)
-    status = models.PositiveSmallIntegerField(choices=CHUNKED_UPLOAD_CHOICES,
-                                              default=UPLOADING)
-    completed_on = models.DateTimeField(null=True, blank=True)
 
     @property
     def expires_on(self):
@@ -39,6 +35,10 @@ class ChunkedUpload(models.Model):
         return self.expires_on <= timezone.now()
 
     @property
+    def exists(self):
+        return self.file.storage.exists(self.file.name)
+
+    @property
     def md5(self):
         if getattr(self, '_md5', None) is None:
             md5 = hashlib.md5()
@@ -46,9 +46,6 @@ class ChunkedUpload(models.Model):
                 md5.update(chunk)
             self._md5 = md5.hexdigest()
         return self._md5
-
-    def file_complete(self, total_size):
-        return self.file.size == total_size
 
     def delete(self, delete_file=True, *args, **kwargs):
         if self.file:
@@ -58,8 +55,8 @@ class ChunkedUpload(models.Model):
             storage.delete(path)
 
     def __str__(self):
-        return u'<%s - upload_id: %s - bytes: %s - status: %s>' % (
-            self.filename, self.upload_id, self.offset, self.status)
+        return u'<%s - upload_id: %s - bytes: %s>' % (
+            self.filename, self.upload_id, self.offset)
 
     def append_chunk(self, chunk, chunk_size=None, save=True):
         self.file.close()
