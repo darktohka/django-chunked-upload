@@ -60,7 +60,7 @@ Typical usage
 
 4. Server will continue responding with the ``upload_id``, the current ``offset`` and the expiration date (``expires``).
 
-5. Finally, when upload is completed, a POST request is sent to the url linked to ``ChunkedUploadCompleteView`` (or any subclass). This request must include the ``upload_id`` and the ``md5`` checksum (hex). Example:
+5. Finally, when upload is completed, a POST request is sent to the url linked to ``ChunkedUploadView`` (or any subclass). This request must include the ``upload_id`` and the ``md5`` checksum (hex). Example:
 
 ::
 
@@ -130,19 +130,7 @@ Add any of these variables into your project settings to override them.
 * Max amount of data (in bytes) that can be uploaded. ``None`` means no limit.
 * Default: ``None``
 
-``CHUNKED_UPLOAD_MODEL_USER_FIELD_NULL``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-* Value of `null <https://docs.djangoproject.com/en/dev/ref/models/fields/#django.db.models.Field.null>`__ option in **user** field of `ChunkedUpload` model
-* Default: ``True``
-
-``CHUNKED_UPLOAD_MODEL_USER_FIELD_BLANK``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-* Value of `blank <https://docs.djangoproject.com/en/dev/ref/models/fields/#django.db.models.Field.blank>`__ option in **user** field of `ChunkedUpload` model
-* Default: ``True``
-
 Support
 -------
 
-If you find any bug or you want to propose a new feature, please use the `issues tracker <https://github.com/juliomalegria/django-chunked-upload/issues>`__. I'll be happy to help you! :-)
+If you find any bug or you want to propose a new feature, please use the `issues tracker <https://github.com/darktohka/django-chunked-upload/issues>`__. I'll be happy to help you! :-)

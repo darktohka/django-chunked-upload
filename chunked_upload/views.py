@@ -12,12 +12,6 @@ from .constants import http_status, COMPLETE
 from .exceptions import ChunkedUploadError
 
 
-def is_authenticated(user):
-    if callable(user.is_authenticated):
-        return user.is_authenticated()  # Django <2.0
-    return user.is_authenticated  # Django >=2.0
-
-
 class ChunkedUploadBaseView(View):
     """
     Base view for the rest of chunked upload views.
@@ -25,17 +19,12 @@ class ChunkedUploadBaseView(View):
 
     # Has to be a ChunkedUpload subclass
     model = ChunkedUpload
-    user_field_name = 'user'  # the field name that point towards the AUTH_USER in ChunkedUpload class or its subclasses
 
     def get_queryset(self, request):
         """
         Get (and filter) ChunkedUpload queryset.
-        By default, users can only continue uploading their own uploads.
         """
-        queryset = self.model.objects.all()
-        if hasattr(self.model, self.user_field_name) and hasattr(request, 'user') and is_authenticated(request.user):
-            queryset = queryset.filter(**{self.user_field_name: request.user})
-        return queryset
+        return self.model.objects.all()
 
     def validate(self, request):
         """
@@ -82,11 +71,11 @@ class ChunkedUploadBaseView(View):
         """
         Grants permission to start/continue an upload based on the request.
         """
-        if hasattr(request, 'user') and not is_authenticated(request.user):
-            raise ChunkedUploadError(
-                status=http_status.HTTP_403_FORBIDDEN,
-                detail='Authentication credentials were not provided'
-            )
+
+    def on_completion(self, uploaded_file, request):
+        """
+        Placeholder method to define what to do when upload is complete.
+        """
 
     def _post(self, request, *args, **kwargs):
         raise NotImplementedError
@@ -106,6 +95,9 @@ class ChunkedUploadView(ChunkedUploadBaseView):
     """
     Uploads large files in multiple chunks. Also, has the ability to resume
     if the upload is interrupted.
+
+    Method `on_completion` is a placeholder to define what to do when upload
+    is complete.
     """
 
     field_name = 'file'
@@ -119,15 +111,16 @@ class ChunkedUploadView(ChunkedUploadBaseView):
     # Upload behavior (doesn't send header if the file is smaller than chunk)
     fail_if_no_header = False
 
+    # I wouldn't recommend to turn off the md5 check, unless is really
+    # impacting your performance. Proceed at your own risk.
+    do_md5_check = True
+
     def get_extra_attrs(self, request):
         """
         Extra attribute values to be passed to the new ChunkedUpload instance.
         Should return a dictionary-like object.
         """
-        attrs = {}
-        if hasattr(self.model, self.user_field_name) and hasattr(request, 'user') and is_authenticated(request.user):
-            attrs[self.user_field_name] = request.user
-        return attrs
+        return {}
 
     def get_max_bytes(self, request):
         """
@@ -170,6 +163,14 @@ class ChunkedUploadView(ChunkedUploadBaseView):
             'offset': chunked_upload.offset,
             'expires': chunked_upload.expires_on
         }
+
+    def md5_check(self, chunked_upload, md5):
+        """
+        Verify if md5 checksum sent by client matches generated md5.
+        """
+        if chunked_upload.md5 != md5:
+            raise ChunkedUploadError(status=http_status.HTTP_400_BAD_REQUEST,
+                                     detail='md5 checksum does not match')
 
     def _post(self, request, *args, **kwargs):
         chunk = request.FILES.get(self.field_name)
@@ -222,70 +223,25 @@ class ChunkedUploadView(ChunkedUploadBaseView):
 
         chunked_upload.append_chunk(chunk, chunk_size=chunk_size, save=False)
 
+        last_chunk = chunked_upload.file_complete(total)
+
+        if last_chunk:
+            if self.do_md5_check:
+                md5 = request.POST.get('md5')
+
+                if not md5:
+                    raise ChunkedUploadError(status=http_status.HTTP_400_BAD_REQUEST,
+                                             detail="'md5' is required")
+
+                self.md5_check(chunked_upload, md5)
+
+            chunked_upload.status = COMPLETE
+            chunked_upload.completed_on = timezone.now()
+
         self._save(chunked_upload)
 
-        return Response(self.get_response_data(chunked_upload, request),
-                        status=http_status.HTTP_200_OK)
-
-
-class ChunkedUploadCompleteView(ChunkedUploadBaseView):
-    """
-    Completes an chunked upload. Method `on_completion` is a placeholder to
-    define what to do when upload is complete.
-    """
-
-    # I wouldn't recommend to turn off the md5 check, unless is really
-    # impacting your performance. Proceed at your own risk.
-    do_md5_check = True
-
-    def on_completion(self, uploaded_file, request):
-        """
-        Placeholder method to define what to do when upload is complete.
-        """
-
-    def is_valid_chunked_upload(self, chunked_upload):
-        """
-        Check if chunked upload is already complete.
-        """
-        if chunked_upload.status == COMPLETE:
-            error_msg = "Upload has already been marked as complete"
-            return ChunkedUploadError(status=http_status.HTTP_400_BAD_REQUEST,
-                                      detail=error_msg)
-
-    def md5_check(self, chunked_upload, md5):
-        """
-        Verify if md5 checksum sent by client matches generated md5.
-        """
-        if chunked_upload.md5 != md5:
-            raise ChunkedUploadError(status=http_status.HTTP_400_BAD_REQUEST,
-                                     detail='md5 checksum does not match')
-
-    def _post(self, request, *args, **kwargs):
-        upload_id = request.POST.get('upload_id')
-        md5 = request.POST.get('md5')
-
-        error_msg = None
-        if self.do_md5_check:
-            if not upload_id or not md5:
-                error_msg = "Both 'upload_id' and 'md5' are required"
-        elif not upload_id:
-            error_msg = "'upload_id' is required"
-        if error_msg:
-            raise ChunkedUploadError(status=http_status.HTTP_400_BAD_REQUEST,
-                                     detail=error_msg)
-
-        chunked_upload = get_object_or_404(self.get_queryset(request),
-                                           upload_id=upload_id)
-
-        self.validate(request)
-        self.is_valid_chunked_upload(chunked_upload)
-        if self.do_md5_check:
-            self.md5_check(chunked_upload, md5)
-
-        chunked_upload.status = COMPLETE
-        chunked_upload.completed_on = timezone.now()
-        self._save(chunked_upload)
-        self.on_completion(chunked_upload.get_uploaded_file(), request)
+        if last_chunk:
+            self.on_completion(chunked_upload.get_uploaded_file(), request)
 
         return Response(self.get_response_data(chunked_upload, request),
                         status=http_status.HTTP_200_OK)

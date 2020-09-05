@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 from django.utils import timezone
 
-from .settings import EXPIRATION_DELTA, UPLOAD_TO, STORAGE, DEFAULT_MODEL_USER_FIELD_NULL, DEFAULT_MODEL_USER_FIELD_BLANK
+from .settings import EXPIRATION_DELTA, UPLOAD_TO, STORAGE
 from .constants import CHUNKED_UPLOAD_CHOICES, UPLOADING
 
 
@@ -14,11 +14,9 @@ def generate_upload_id():
     return uuid.uuid4().hex
 
 
-class AbstractChunkedUpload(models.Model):
+class ChunkedUpload(models.Model):
     """
-    Base chunked upload model. This model is abstract (doesn't create a table
-    in the database).
-    Inherit from this model to implement your own.
+    Default chunked upload model.
     """
 
     upload_id = models.CharField(max_length=32, unique=True, editable=False,
@@ -48,6 +46,9 @@ class AbstractChunkedUpload(models.Model):
                 md5.update(chunk)
             self._md5 = md5.hexdigest()
         return self._md5
+
+    def file_complete(self, total_size):
+        return self.file.size == total_size
 
     def delete(self, delete_file=True, *args, **kwargs):
         if self.file:
@@ -81,19 +82,3 @@ class AbstractChunkedUpload(models.Model):
         self.file.open(mode='rb')  # mode = read+binary
         return UploadedFile(file=self.file, name=self.filename,
                             size=self.offset)
-
-    class Meta:
-        abstract = True
-
-
-class ChunkedUpload(AbstractChunkedUpload):
-    """
-    Default chunked upload model.
-    """
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='chunked_uploads',
-        null=DEFAULT_MODEL_USER_FIELD_NULL,
-        blank=DEFAULT_MODEL_USER_FIELD_BLANK
-    )
