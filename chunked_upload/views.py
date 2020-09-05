@@ -230,7 +230,7 @@ class ChunkedUploadView(ChunkedUploadBaseView):
 
                 self.md5_check(chunked_upload, md5)
 
-            self.on_completion(chunked_upload.get_uploaded_file(), request)
+            response = self.on_completion(chunked_upload.get_uploaded_file(), request)
 
             if chunked_upload.exists:
                 chunked_upload.file.delete()
@@ -238,6 +238,6 @@ class ChunkedUploadView(ChunkedUploadBaseView):
             chunked_upload.delete()
         else:
             self._save(chunked_upload)
+            response = self.get_response_data(chunked_upload, request)
 
-        return Response(self.get_response_data(chunked_upload, request),
-                        status=HTTPStatus.HTTP_200_OK)
+        return Response(response, status=HTTPStatus.HTTP_200_OK)
