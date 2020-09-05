@@ -35,10 +35,6 @@ class ChunkedUpload(models.Model):
         return self.expires_on <= timezone.now()
 
     @property
-    def exists(self):
-        return self.file.storage.exists(self.file.name)
-
-    @property
     def md5(self):
         if getattr(self, '_md5', None) is None:
             md5 = hashlib.md5()
