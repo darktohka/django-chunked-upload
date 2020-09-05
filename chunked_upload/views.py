@@ -223,7 +223,7 @@ class ChunkedUploadView(ChunkedUploadBaseView):
 
         chunked_upload.append_chunk(chunk, chunk_size=chunk_size, save=False)
 
-        last_chunk = chunked_upload.file_complete(total)
+        last_chunk = (total == (end + 1))
 
         if last_chunk:
             if self.do_md5_check:

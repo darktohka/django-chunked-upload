@@ -53,7 +53,7 @@ class ChunkedUpload(models.Model):
     def delete(self, delete_file=True, *args, **kwargs):
         if self.file:
             storage, path = self.file.storage, self.file.path
-        super(AbstractChunkedUpload, self).delete(*args, **kwargs)
+        super(ChunkedUpload, self).delete(*args, **kwargs)
         if self.file and delete_file:
             storage.delete(path)
 
